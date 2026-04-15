@@ -1,0 +1,101 @@
+{
+  "subsonic-response": {
+    "searchResult3": {
+      "album": [
+        {
+          "artist": "Hatsune Miku, 海賊王 & [TEST]",
+          "coverArt": "523057413",
+          "created": "2012-05-23T00:00:00",
+          "genre": "摇滚",
+          "id": "523057413",
+          "musicFolderId": 1,
+          "name": "TwinTail TwinGuitar",
+          "songCount": 15,
+          "year": 2012
+        },
+        {
+          "artist": "Blume popo",
+          "coverArt": "1790412740",
+          "created": "2025-01-29T00:00:00",
+          "genre": "另类音乐",
+          "id": "1790412740",
+          "musicFolderId": 1,
+          "name": "Test for Texture of Text - EP",
+          "songCount": 5,
+          "year": 2025
+        }
+      ],
+      "artist": [
+        {
+          "artistImageUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/5f/a7/5b/5fa75b2c-f3f9-dd33-61ae-bf532980c268/4538182196076.png/1200x1200ac.jpg",
+          "coverArt": "458044047",
+          "id": "458044047",
+          "name": "[TEST]"
+        },
+        {
+          "artistImageUrl": "https://is1-ssl.mzstatic.com/image/thumb/AMCArtistImages221/v4/28/83/bb/2883bba6-30c9-186d-a5d8-c0b9abe0289d/file_cropped.png/1200x1200bb.jpg",
+          "coverArt": "1071184500",
+          "id": "1071184500",
+          "name": "Test"
+        }
+      ],
+      "song": [
+        {
+          "album": "ALL I DO IS DRILLING",
+          "artist": "邓典果DDG",
+          "contentType": "audio/mp4",
+          "coverArt": "1554079707",
+          "created": "2021-02-24T00:00:00",
+          "discNumber": 1,
+          "duration": 189,
+          "genre": "嘻哈/说唱",
+          "id": "1554079707",
+          "isDir": false,
+          "musicFolderId": 1,
+          "suffix": "m4a",
+          "title": "TEST",
+          "track": 4,
+          "year": 2021
+        },
+        {
+          "album": "Little Dragon",
+          "artist": "Little Dragon",
+          "contentType": "audio/mp4",
+          "coverArt": "258618600",
+          "created": "2007-08-28T00:00:00",
+          "discNumber": 1,
+          "duration": 268,
+          "genre": "电子音乐",
+          "id": "258618600",
+          "isDir": false,
+          "musicFolderId": 1,
+          "suffix": "m4a",
+          "title": "Test",
+          "track": 10,
+          "year": 2007
+        },
+        {
+          "album": "Bad Liar - Single",
+          "artist": "Selena Gomez",
+          "contentType": "audio/mp4",
+          "coverArt": "1444849000",
+          "created": "2017-05-18T00:00:00",
+          "discNumber": 1,
+          "duration": 214,
+          "genre": "国际流行",
+          "id": "1444849000",
+          "isDir": false,
+          "musicFolderId": 1,
+          "suffix": "m4a",
+          "title": "Bad Liar",
+          "track": 1,
+          "year": 2017
+        }
+      ]
+    },
+    "serverVersion": "a97d7c41",
+    "status": "ok",
+    "type": "wrapper-rs",
+    "version": "1.16.1"
+  }
+}

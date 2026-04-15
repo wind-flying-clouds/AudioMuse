@@ -1,0 +1,13 @@
+{
+  "subsonic-response": {
+    "lyrics": {
+      "artist": "Little Dragon",
+      "title": "Test",
+      "value": "[00:15.32]A test, a test, a test, no rest\n[00:21.03]No rest, no rest\n[00:23.23]Just when you wanna exhale\n[00:26.09]You'll go downhill\n[00:28.30]He stands in the light, kisses your ears\n[00:30.83]Just when you wanna relax\n[00:33.81]Wanna be alone\n[00:35.47]A crowd comes\n[00:38.08]Then a test, a test, a test, no rest\n[00:44.08]No rest, no rest\n[01:01.49]Just when you wanna give up\n[01:04.32]And everything's flat\n[01:06.24]Emotions running back and forth\n[01:09.96]There's no rest, no rest\n[01:17.07]Hurry to be on track\n[01:19.68]Don't wanna walk back\n[01:24.53]Steady on the elevator lift to the top\n[01:30.19]Then a stop, a challenge\n[01:34.88]Confess confess\n[01:37.05]I don't stop, no way\n[01:40.90]Up and down the hill\n[01:44.99]All around the carousel\n[01:49.42]A flowery smell\n[01:53.25]A dead end\n[02:02.68]A stop, a stop, a challenge\n[02:06.53]Confess, confess\n[02:56.58]The test, a test, a test no rest\n[03:02.55]No rest, no rest\n[03:04.44]Just when you think it's the end\n[03:07.18]And everything's black\n[03:09.25]Hiding in the dark there's a sudden flash light\n[03:14.58]And you're back\n[03:19.90]Back on the elevator lift to the top, another stop\n[03:30.13]A test, a test\n[03:35.43]Test, test, test, test...\n[03:41.36]Oh, my life's a\n[03:42.76]Test, test, test, test...\n[03:49.16]Every day's a\n[03:50.59]Test, test, test, test..."
+    },
+    "serverVersion": "a97d7c41",
+    "status": "ok",
+    "type": "wrapper-rs",
+    "version": "1.16.1"
+  }
+}

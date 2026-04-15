@@ -1,0 +1,46 @@
+//
+//  Package.swift
+//  MuseAmpDatabaseKit
+//
+//  Created by @Lakr233 on 2026/04/11.
+//
+
+// swift-tools-version: 6.2
+
+import PackageDescription
+
+let package = Package(
+    name: "MuseAmpDatabaseKit",
+    defaultLocalization: "en",
+    platforms: [
+        .iOS(.v15),
+        .macOS(.v12),
+    ],
+    products: [
+        .library(
+            name: "MuseAmpDatabaseKit",
+            targets: ["MuseAmpDatabaseKit"],
+        ),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/Lakr233/wcdb-spm-prebuilt", from: "2.1.10"),
+    ],
+    targets: [
+        .target(
+            name: "MuseAmpDatabaseKit",
+            dependencies: [
+                .product(name: "WCDBSwift", package: "wcdb-spm-prebuilt"),
+            ],
+            resources: [
+                .process("Resources"),
+            ],
+        ),
+        .testTarget(
+            name: "MuseAmpDatabaseKitTests",
+            dependencies: [
+                "MuseAmpDatabaseKit",
+            ],
+        ),
+    ],
+    swiftLanguageModes: [.v6],
+)

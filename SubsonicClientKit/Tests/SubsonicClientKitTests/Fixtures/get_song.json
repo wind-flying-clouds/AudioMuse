@@ -1,0 +1,28 @@
+{
+  "subsonic-response": {
+    "serverVersion": "a97d7c41",
+    "song": {
+      "album": "Little Dragon",
+      "albumId": "258615649",
+      "artist": "Little Dragon",
+      "artistId": "258535972",
+      "contentType": "audio/mp4",
+      "coverArt": "258615649",
+      "created": "2007-08-28T00:00:00",
+      "discNumber": 1,
+      "duration": 268,
+      "genre": "电子音乐",
+      "id": "258618600",
+      "isDir": false,
+      "musicFolderId": 1,
+      "parent": "258615649",
+      "suffix": "m4a",
+      "title": "Test",
+      "track": 10,
+      "year": 2007
+    },
+    "status": "ok",
+    "type": "wrapper-rs",
+    "version": "1.16.1"
+  }
+}

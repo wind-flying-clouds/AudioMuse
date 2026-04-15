@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <FileRef
+      location = "group:MuseAmp.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:MuseAmp.xctestplan">
+   </FileRef>
+   <FileRef
+      location = "group:SubsonicClientKit">
+   </FileRef>
+   <FileRef
+      location = "group:MuseAmpDatabaseKit">
+   </FileRef>
+   <FileRef
+      location = "group:MuseAmpPlayerKit">
+   </FileRef>
+   <FileRef
+      location = "group:Vendor/LNPopupController">
+   </FileRef>
+</Workspace>

@@ -1,0 +1,145 @@
+//
+//  TVAppContext+Bootstrap.swift
+//  MuseAmpTV
+//
+//  Created by @Lakr233 on 2026/04/11.
+//
+
+import Foundation
+import Kingfisher
+import MuseAmpDatabaseKit
+import SubsonicClientKit
+import UIKit
+
+extension TVAppContext {
+    static func initializeDatabaseManager(
+        apiBaseURL: URL = AppPreferences.defaultAPIBaseURL,
+        baseDirectory: URL? = nil,
+    ) throws -> DatabaseManager {
+        let resolvedBaseDirectory = baseDirectory ?? makeLibraryBaseDirectory()
+        let paths = LibraryPaths(baseDirectory: resolvedBaseDirectory)
+        AppLog.bootstrap(with: paths)
+        let apiClient = makeAPIClient(apiBaseURL: apiBaseURL)
+        let metadataReader = EmbeddedMetadataReader()
+        let manager = DatabaseManager(
+            baseDirectory: paths.baseDirectory,
+            dependencies: makeRuntimeDependencies(
+                apiClient: apiClient,
+                metadataReader: metadataReader,
+                paths: paths,
+            ),
+            logSink: { level, scope, message in
+                switch level {
+                case .verbose:
+                    AppLog.verbose(scope, message)
+                case .info:
+                    AppLog.info(scope, message)
+                case .warning:
+                    AppLog.warning(scope, message)
+                case .error, .critical:
+                    AppLog.error(scope, message)
+                }
+            },
+        )
+        try manager.initializeSynchronously()
+        return manager
+    }
+
+    static func makeLibraryBaseDirectory() -> URL {
+        let cachesURL =
+            FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+                ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        return cachesURL.appendingPathComponent("TVOfflineLibrary", isDirectory: true)
+    }
+
+    static func makePlaylistSessionStore(paths: LibraryPaths) -> TVPlaylistSessionStore {
+        TVPlaylistSessionStore(
+            fileURL: paths.baseDirectory.appendingPathComponent("tv-playlist-session.json", isDirectory: false),
+        )
+    }
+
+    static func makeAPIClient(apiBaseURL: URL) -> APIClient {
+        APIClient(baseURL: apiBaseURL)
+    }
+
+    static func makeRuntimeDependencies(
+        apiClient: APIClient,
+        metadataReader: EmbeddedMetadataReader,
+        paths: LibraryPaths,
+    ) -> RuntimeDependencies {
+        RuntimeDependencies(
+            resolveDownloadURL: { trackID in
+                let playback = try await apiClient.playback(id: trackID)
+                guard let resolvedURL = URL(string: playback.playbackURL) else {
+                    throw NSError(domain: "TVAppContext", code: 1)
+                }
+                return resolvedURL
+            },
+            requestHeaders: { _ in
+                [:]
+            },
+            fetchLyrics: { trackID in
+                try await apiClient.lyrics(id: trackID)
+            },
+            fetchArtworkData: { artworkURL in
+                let (data, _) = try await URLSession.shared.data(for: URLRequest(url: artworkURL))
+                return data.isEmpty ? nil : data
+            },
+            inspectAudioFile: { fileURL in
+                let relativePath = paths.relativeAudioPath(for: fileURL)
+                let pathParts = relativePath.split(separator: "/", maxSplits: 1).map(String.init)
+                let albumID = pathParts.first
+                let trackID = URL(fileURLWithPath: pathParts.last ?? fileURL.lastPathComponent)
+                    .deletingPathExtension()
+                    .lastPathComponent
+                let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+                let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+                let modifiedAt = attributes[.modificationDate] as? Date ?? .init()
+                let record = try await metadataReader.makeTrackRecord(
+                    fileURL: fileURL,
+                    relativePath: relativePath,
+                    trackID: trackID,
+                    albumID: albumID,
+                    fileSize: fileSize,
+                    modifiedAt: modifiedAt,
+                )
+                let artwork = await metadataReader.extractArtwork(from: fileURL)
+                let metadata = ImportedTrackMetadata(
+                    trackID: record.trackID,
+                    albumID: record.albumID,
+                    title: record.title,
+                    artistName: record.artistName,
+                    albumTitle: record.albumTitle,
+                    albumArtistName: record.albumArtistName,
+                    durationSeconds: record.durationSeconds,
+                    trackNumber: record.trackNumber,
+                    discNumber: record.discNumber,
+                    genreName: record.genreName,
+                    composerName: record.composerName,
+                    releaseDate: record.releaseDate,
+                    lyrics: nil,
+                    sourceKind: .unknown,
+                )
+                return AudioFileInspection(
+                    metadata: metadata,
+                    embeddedArtwork: artwork,
+                )
+            },
+            setScreenAwake: { shouldKeepAwake in
+                DispatchQueue.main.async {
+                    UIApplication.shared.isIdleTimerDisabled = shouldKeepAwake
+                }
+            },
+        )
+    }
+
+    static func configureImageRequestAuthorization() {
+        KingfisherManager.shared.defaultOptions =
+            KingfisherManager.shared.defaultOptions.filter { option in
+                if case .requestModifier = option {
+                    return false
+                }
+                return true
+            } + [.backgroundDecode]
+    }
+}

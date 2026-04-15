@@ -1,0 +1,21 @@
+# Submodules (Vendor/With, Vendor/GlyphixTextFx, Vendor/Choreographer, Vendor/LNPopupController)
+Vendor/
+
+# Build artifacts
+build/
+.build/
+DerivedData/
+
+# SwiftPM / Xcode caches
+.swiftpm/
+*.xcodeproj/
+*.xcworkspace/
+
+# Package-local build output inside nested SwiftPM packages
+SubsonicClientKit/.build/
+MuseAmpPlayerKit/.build/
+MuseAmpDatabaseKit/.build/
+MuseAmpInterfaceKit/.build/
+
+# Localization catalogs (managed by Xcode + strip_stale_xcstrings.py)
+**/Localizable.xcstrings

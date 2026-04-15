@@ -1,0 +1,8 @@
+{
+  "subsonic-response": {
+    "serverVersion": "a97d7c41",
+    "status": "ok",
+    "type": "wrapper-rs",
+    "version": "1.16.1"
+  }
+}

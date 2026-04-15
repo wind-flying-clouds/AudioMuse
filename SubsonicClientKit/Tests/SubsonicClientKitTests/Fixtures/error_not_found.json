@@ -1,0 +1,12 @@
+{
+  "subsonic-response": {
+    "error": {
+      "code": 0,
+      "message": "apple api request failed: 404 Not Found"
+    },
+    "serverVersion": "a97d7c41",
+    "status": "failed",
+    "type": "wrapper-rs",
+    "version": "1.16.1"
+  }
+}

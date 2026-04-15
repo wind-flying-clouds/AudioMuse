@@ -1,0 +1,9 @@
+{
+  "subsonic-response": {
+    "error": { "code": 40, "message": "wrong username or password" },
+    "serverVersion": "a97d7c41",
+    "status": "failed",
+    "type": "wrapper-rs",
+    "version": "1.16.1"
+  }
+}
