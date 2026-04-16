@@ -59,6 +59,8 @@ SCANNER_DIR=(
     "$PROJECT_ROOT/Vendor"
 )
 
+declare -A MANUAL_LICENSE_OVERRIDES
+
 # Build package name mapping from Package.resolved
 declare -A PACKAGE_NAME_MAP
 PACKAGE_RESOLVED="${PROJECT_ROOT}/MuseAmp.xcworkspace/xcshareddata/swiftpm/Package.resolved"
@@ -99,32 +101,47 @@ function get_correct_package_name {
     fi
 }
 
+function append_license_file {
+    local file=$1
+    local package_name
+    package_name=$(get_correct_package_name "$(basename "$(dirname "$file")")")
+
+    # skip debug-only tools with incompatible licenses
+    if [[ "$package_name" == "LookInside" ]]; then
+        return
+    fi
+
+    if [[ "$2" == "manual" ]]; then
+        MANUAL_LICENSE_OVERRIDES[$package_name]=1
+    elif [[ -n "${MANUAL_LICENSE_OVERRIDES[$package_name]}" ]]; then
+        echo "[*] skipping bundled license for $package_name because an AdditionalLicenses override exists"
+        return
+    fi
+
+    SCANNED_LICENSE_CONTENT="${SCANNED_LICENSE_CONTENT}\n\n## ${package_name}\n\n$(cat "$file")"
+}
+
 SCANNED_LICENSE_CONTENT="# Open Source License\n\n"
 
 for dir in "${SCANNER_DIR[@]}"; do
     if [[ -d "$dir" ]]; then
-        for file in $(find "$dir" -maxdepth 2 -name "LICENSE*" -type f); do
-            PACKAGE_NAME=$(get_correct_package_name $(basename $(dirname $file)))
+        source_kind="scanned"
+        if [[ "$dir" == "$PROJECT_ROOT/Resources/AdditionalLicenses" ]]; then
+            source_kind="manual"
+        fi
 
-            # skip debug-only tools with incompatible licenses
-            if [[ "$PACKAGE_NAME" == "LookInside" ]]; then
-                continue
-            fi
-
-            SCANNED_LICENSE_CONTENT="${SCANNED_LICENSE_CONTENT}\n\n## ${PACKAGE_NAME}\n\n$(cat $file)"
-        done
-        for file in $(find "$dir" -maxdepth 2 -name "COPYING*" -type f); do
-            PACKAGE_NAME=$(get_correct_package_name $(basename $(dirname $file)))
-
-            # skip debug-only tools with incompatible licenses
-            if [[ "$PACKAGE_NAME" == "LookInside" ]]; then
-                continue
-            fi
-
-            SCANNED_LICENSE_CONTENT="${SCANNED_LICENSE_CONTENT}\n\n## ${PACKAGE_NAME}\n\n$(cat $file)"
-        done
+        while IFS= read -r file; do
+            append_license_file "$file" "$source_kind"
+        done < <(find "$dir" -maxdepth 2 -type f \( -name "LICENSE*" -o -name "COPYING*" \) | sort)
     fi
 done
+
+if [[ ${#MANUAL_LICENSE_OVERRIDES[@]} -gt 0 ]]; then
+    echo "[*] loaded manual license overrides for:"
+    for package_name in ${(ok)MANUAL_LICENSE_OVERRIDES}; do
+        echo "    - $package_name"
+    done
+fi
 
 LICENSE_OUTPUTS=(
     "$PROJECT_ROOT/MuseAmp/Resources/OpenSourceLicenses.md"

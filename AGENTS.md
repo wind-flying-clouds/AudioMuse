@@ -241,6 +241,7 @@
 - A shell exit code of `0` from `make build*` or `make test` is **not** proof of success. `xcodebuild` can exit `0` while the build/test actually failed, or while emitting warnings that must be addressed. Always read the full log output and verify: (1) no compiler errors, (2) no compiler warnings, (3) for `make test`, every test case reported as passed. Fix every warning and error surfaced in the logs before declaring the task complete.
 - Package resolution + license refresh: `make package-resolve` (alias: `make scan-license`).
 - Release flows that refresh licenses against an intentionally dirty tree must pass `dirty=1` (e.g. `make package-resolve dirty=1`); this is forwarded as `ALLOW_DIRTY=1` to the scan script.
+- Manually collected upstream license texts belong under `Resources/AdditionalLicenses/<PackageName>/LICENSE` or `COPYING`. The scanner prefers these files over bundled dependency licenses when both exist.
 - Format: `make format` (rewrite) or `make format-lint` (check only). Submodules under `Vendor/` and build artifacts are excluded automatically.
 - Localization hygiene: `make strip-xcstrings` drops stale keys and syncs source-language values in every `Localizable.xcstrings`; `make validate-xcstrings` checks stale keys and missing translations across every locale the file already uses (discovered from the file itself).
 - If a Makefile target is missing for an operation you need, add the target to the `Makefile` instead of shelling out to `xcodebuild`.
