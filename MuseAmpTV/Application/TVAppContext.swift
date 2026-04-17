@@ -70,6 +70,7 @@ final class TVAppContext {
         Self.configureImageRequestAuthorization()
 
         metadataReader = EmbeddedMetadataReader()
+        let tagLibMetadataReader = TagLibEmbeddedMetadataReader()
         libraryDatabase = MusicLibraryDatabase(databaseManager: databaseManager, paths: paths)
         lyricsCacheStore = databaseManager.lyricsCacheStore
         playlistStore = PlaylistStore(database: libraryDatabase)
@@ -91,6 +92,7 @@ final class TVAppContext {
             paths: paths,
             database: libraryDatabase,
             metadataReader: metadataReader,
+            tagLibMetadataReader: tagLibMetadataReader,
             apiClient: apiClient,
         )
         syncTransferSession = SyncTransferSession(

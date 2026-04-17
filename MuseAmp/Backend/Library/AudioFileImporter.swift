@@ -23,26 +23,45 @@ nonisolated struct AudioImportResult {
 
 nonisolated struct AudioImportOptions {
     let allowsBackgroundArtworkFetch: Bool
+    let metadataBackend: AudioImportMetadataBackend
 
-    static let `default` = AudioImportOptions(allowsBackgroundArtworkFetch: true)
-    static let offlineTransfer = AudioImportOptions(allowsBackgroundArtworkFetch: false)
+    static let `default` = AudioImportOptions(
+        allowsBackgroundArtworkFetch: true,
+        metadataBackend: .avFoundation,
+    )
+    static let offlineTransfer = AudioImportOptions(
+        allowsBackgroundArtworkFetch: false,
+        metadataBackend: .avFoundation,
+    )
+    static let tagLib = AudioImportOptions(
+        allowsBackgroundArtworkFetch: true,
+        metadataBackend: .tagLib,
+    )
+}
+
+nonisolated enum AudioImportMetadataBackend: Sendable {
+    case avFoundation
+    case tagLib
 }
 
 final class AudioFileImporter: @unchecked Sendable {
     private let paths: LibraryPaths
     private let database: MusicLibraryDatabase
     private let metadataReader: EmbeddedMetadataReader
+    private let tagLibMetadataReader: TagLibEmbeddedMetadataReader
     private let apiClient: APIClient
 
     init(
         paths: LibraryPaths,
         database: MusicLibraryDatabase,
         metadataReader: EmbeddedMetadataReader,
+        tagLibMetadataReader: TagLibEmbeddedMetadataReader,
         apiClient: APIClient,
     ) {
         self.paths = paths
         self.database = database
         self.metadataReader = metadataReader
+        self.tagLibMetadataReader = tagLibMetadataReader
         self.apiClient = apiClient
     }
 
@@ -103,6 +122,7 @@ final class AudioFileImporter: @unchecked Sendable {
                     fileURL: fileURL,
                     existingTracks: existingTracks,
                     batchImported: &batchImported,
+                    metadataBackend: options.metadataBackend,
                 )
                 switch result {
                 case let .success(importedTrack):
@@ -169,6 +189,28 @@ private extension AudioFileImporter {
     }
 
     func importSingleFile(
+        fileURL: URL,
+        existingTracks: [AudioTrackRecord],
+        batchImported: inout Set<DuplicateKey>,
+        metadataBackend: AudioImportMetadataBackend,
+    ) async throws -> SingleImportResult {
+        switch metadataBackend {
+        case .avFoundation:
+            return try await importSingleFileUsingAVFoundation(
+                fileURL: fileURL,
+                existingTracks: existingTracks,
+                batchImported: &batchImported,
+            )
+        case .tagLib:
+            return try await importSingleFileUsingTagLib(
+                fileURL: fileURL,
+                existingTracks: existingTracks,
+                batchImported: &batchImported,
+            )
+        }
+    }
+
+    func importSingleFileUsingAVFoundation(
         fileURL: URL,
         existingTracks: [AudioTrackRecord],
         batchImported: inout Set<DuplicateKey>,
@@ -335,6 +377,176 @@ private extension AudioFileImporter {
         return nil
     }
 
+    func importSingleFileUsingTagLib(
+        fileURL: URL,
+        existingTracks: [AudioTrackRecord],
+        batchImported: inout Set<DuplicateKey>,
+    ) async throws -> SingleImportResult {
+        let ext = fileURL.pathExtension.lowercased()
+        let fileName = fileURL.deletingPathExtension().lastPathComponent
+        let sourceAttributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let fileSize = (sourceAttributes[.size] as? NSNumber)?.int64Value ?? 0
+        let modifiedAt = sourceAttributes[.modificationDate] as? Date ?? .init()
+
+        let inspectedRecord: AudioTrackRecord
+        do {
+            inspectedRecord = try tagLibMetadataReader.makeTrackRecord(
+                fileURL: fileURL,
+                relativePath: "",
+                trackID: "",
+                albumID: nil,
+                fileSize: fileSize,
+                modifiedAt: modifiedAt,
+            )
+        } catch {
+            AppLog.warning(
+                self,
+                "importSingleFileUsingTagLib metadata parse failed file='\(fileName)' error=\(error)",
+            )
+            return try await importSingleFileUsingAVFoundation(
+                fileURL: fileURL,
+                existingTracks: existingTracks,
+                batchImported: &batchImported,
+            )
+        }
+
+        guard let catalogComment = try? tagLibMetadataReader.extractComment(from: fileURL),
+              let catalogIDs = extractCatalogIDs(fromComment: catalogComment)
+        else {
+            AppLog.warning(
+                self,
+                "importSingleFileUsingTagLib noCatalogMetadata file='\(fileName)' (sender likely did not embed catalog comment JSON)",
+            )
+            return .noMetadata
+        }
+
+        let trackID = catalogIDs.trackID
+        let albumID = catalogIDs.albumID
+        let title = inspectedRecord.title
+        let artist = inspectedRecord.artistName
+        let albumName = inspectedRecord.albumTitle
+
+        guard !title.isEmpty, !artist.isEmpty else {
+            AppLog.warning(
+                self,
+                "importSingleFileUsingTagLib noMetadata file='\(fileName)' trackID=\(trackID) hasTitle=\(!title.isEmpty) hasArtist=\(!artist.isEmpty)",
+            )
+            return .noMetadata
+        }
+
+        let dupKey = DuplicateKey(
+            title: title, artist: artist, album: albumName, duration: inspectedRecord.durationSeconds,
+        )
+        if batchImported.contains(dupKey) {
+            AppLog.verbose(
+                self, "importSingleFileUsingTagLib intra-batch duplicate title='\(title)' artist='\(artist)'",
+            )
+            return .duplicate
+        }
+
+        if isDuplicate(
+            title: title,
+            artist: artist,
+            album: albumName,
+            duration: inspectedRecord.durationSeconds,
+            in: existingTracks,
+        ) {
+            AppLog.verbose(self, "importSingleFileUsingTagLib duplicate title='\(title)' artist='\(artist)'")
+            return .duplicate
+        }
+
+        let destinationRelativePath =
+            "\(sanitizePathComponent(albumID))/\(sanitizePathComponent(trackID)).\(ext.isEmpty ? "m4a" : ext)"
+        let destURL = paths.absoluteAudioURL(for: destinationRelativePath)
+        if FileManager.default.fileExists(atPath: destURL.path) {
+            AppLog.verbose(
+                self, "importSingleFileUsingTagLib file already exists trackID=\(trackID) albumID=\(albumID)",
+            )
+            return .duplicate
+        }
+
+        let finalRecord = try tagLibMetadataReader.makeTrackRecord(
+            fileURL: fileURL,
+            relativePath: destinationRelativePath,
+            trackID: trackID,
+            albumID: albumID,
+            fileSize: fileSize,
+            modifiedAt: modifiedAt,
+        )
+        let embeddedLyrics = try? tagLibMetadataReader.extractLyrics(from: fileURL)
+
+        let stagingURL = paths.incomingDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: false)
+            .appendingPathExtension(ext.isEmpty ? "m4a" : ext)
+        try FileManager.default.createDirectory(
+            at: paths.incomingDirectory,
+            withIntermediateDirectories: true,
+        )
+        try FileManager.default.copyItem(at: fileURL, to: stagingURL)
+
+        let metadata = ImportedTrackMetadata(
+            trackID: trackID,
+            albumID: albumID,
+            title: finalRecord.title,
+            artistName: finalRecord.artistName,
+            albumTitle: finalRecord.albumTitle,
+            albumArtistName: finalRecord.albumArtistName,
+            durationSeconds: finalRecord.durationSeconds,
+            trackNumber: finalRecord.trackNumber,
+            discNumber: finalRecord.discNumber,
+            genreName: finalRecord.genreName,
+            composerName: finalRecord.composerName,
+            releaseDate: finalRecord.releaseDate,
+            lyrics: embeddedLyrics,
+            sourceKind: .imported,
+        )
+
+        let ingestedRecord: AudioTrackRecord
+        do {
+            ingestedRecord = try await database.ingestAudioFile(url: stagingURL, metadata: metadata)
+        } catch {
+            if FileManager.default.fileExists(atPath: stagingURL.path) {
+                try? FileManager.default.removeItem(at: stagingURL)
+            }
+            throw error
+        }
+
+        batchImported.insert(dupKey)
+        return .success(
+            ImportedTrack(
+                trackID: trackID,
+                artworkURL: catalogIDs.artworkURL,
+                hasEmbeddedArtwork: ingestedRecord.hasEmbeddedArtwork,
+            ),
+        )
+    }
+
+    func extractCatalogIDs(fromComment comment: String?) -> EmbeddedCatalogIDs? {
+        guard let comment = comment?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let data = comment.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let trackID = json["trackID"] as? String, trackID.isCatalogID,
+              let albumID = json["albumID"] as? String, albumID.isCatalogID
+        else {
+            return nil
+        }
+        let artworkURLString = (json["artworkURL"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let artworkURL: URL? = artworkURLString.flatMap { artworkURLString in
+            guard !artworkURLString.isEmpty else {
+                return nil
+            }
+            guard let artworkURL = URL(string: artworkURLString) else {
+                AppLog.warning(
+                    self, "extractCatalogIDs invalid artworkURL='\(artworkURLString)' trackID=\(trackID)",
+                )
+                return nil
+            }
+            return artworkURL
+        }
+        return EmbeddedCatalogIDs(trackID: trackID, albumID: albumID, artworkURL: artworkURL)
+    }
+
     func isDuplicate(
         title: String, artist: String, album: String, duration: Double, in tracks: [AudioTrackRecord],
     ) -> Bool {
@@ -379,15 +591,7 @@ private extension AudioFileImporter {
         guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .contentTypeKey]),
               values.isRegularFile == true
         else { return false }
-
-        if let contentType = values.contentType, contentType.conforms(to: .audio) {
-            return true
-        }
-
-        let audioExtensions: Set = [
-            "mp3", "m4a", "flac", "wav", "aac", "aiff", "alac", "ogg", "wma", "opus",
-        ]
-        return audioExtensions.contains(url.pathExtension.lowercased())
+        return url.pathExtension.lowercased() == "m4a"
     }
 
     func extractString(in items: [AVMetadataItem], matching tokens: [String]) async
