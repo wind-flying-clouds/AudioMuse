@@ -284,6 +284,7 @@ extension AudioFileImporter {
             paths: paths,
             database: database,
             metadataReader: metadataReader,
+            tagLibMetadataReader: TagLibEmbeddedMetadataReader(),
             apiClient: apiClient,
         )
     }

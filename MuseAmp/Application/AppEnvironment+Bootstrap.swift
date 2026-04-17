@@ -93,36 +93,28 @@ extension AppEnvironment {
                 let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
                 let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? 0
                 let modifiedAt = attributes[.modificationDate] as? Date ?? .init()
-                let record: AudioTrackRecord
-                let artwork: Data?
-                if fileURL.pathExtension.lowercased() == "m4a" {
-                    do {
-                        record = try tagLibMetadataReader.makeTrackRecord(
-                            fileURL: fileURL,
-                            relativePath: relativePath,
-                            trackID: trackID,
-                            albumID: albumID,
-                            fileSize: fileSize,
-                            modifiedAt: modifiedAt,
-                        )
-                        artwork = try tagLibMetadataReader.extractArtwork(from: fileURL)
-                    } catch {
-                        AppLog.warning(
-                            "AppEnvironment",
-                            "TagLib inspectAudioFile fallback to AVFoundation for '\(fileURL.lastPathComponent)' error=\(error)",
-                        )
-                        record = try await metadataReader.makeTrackRecord(
-                            fileURL: fileURL,
-                            relativePath: relativePath,
-                            trackID: trackID,
-                            albumID: albumID,
-                            fileSize: fileSize,
-                            modifiedAt: modifiedAt,
-                        )
-                        artwork = await metadataReader.extractArtwork(from: fileURL)
+                let (record, artwork): (AudioTrackRecord, Data?) = try await {
+                    if fileURL.pathExtension.lowercased() == "m4a" {
+                        do {
+                            let record = try tagLibMetadataReader.makeTrackRecord(
+                                fileURL: fileURL,
+                                relativePath: relativePath,
+                                trackID: trackID,
+                                albumID: albumID,
+                                fileSize: fileSize,
+                                modifiedAt: modifiedAt,
+                            )
+                            let artwork = try tagLibMetadataReader.extractArtwork(from: fileURL)
+                            return (record, artwork)
+                        } catch {
+                            AppLog.warning(
+                                "AppEnvironment",
+                                "TagLib inspectAudioFile fallback to AVFoundation for '\(fileURL.lastPathComponent)' error=\(error)",
+                            )
+                        }
                     }
-                } else {
-                    record = try await metadataReader.makeTrackRecord(
+
+                    let record = try await metadataReader.makeTrackRecord(
                         fileURL: fileURL,
                         relativePath: relativePath,
                         trackID: trackID,
@@ -130,8 +122,9 @@ extension AppEnvironment {
                         fileSize: fileSize,
                         modifiedAt: modifiedAt,
                     )
-                    artwork = await metadataReader.extractArtwork(from: fileURL)
-                }
+                    let artwork = await metadataReader.extractArtwork(from: fileURL)
+                    return (record, artwork)
+                }()
                 let metadata = ImportedTrackMetadata(
                     trackID: record.trackID,
                     albumID: record.albumID,

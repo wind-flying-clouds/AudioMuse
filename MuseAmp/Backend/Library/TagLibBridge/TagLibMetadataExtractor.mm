@@ -1625,7 +1625,7 @@ static NSString * _Nullable FirstStringFromProperty(const TagLib::PropertyMap &p
     for (const char *key : keys) {
         if (!key) continue;
         if (properties.contains(key) && !properties[key].isEmpty()) {
-            NSMutableArray<NSString *> *trimmedValues = [NSMutableArray array];
+            NSMutableOrderedSet<NSString *> *trimmedValues = [NSMutableOrderedSet orderedSet];
             for (const auto &value : properties[key]) {
                 NSString *trimmed = TrimmedStringOrNil(TagStringToNSString(value));
                 if (trimmed) {
@@ -1638,7 +1638,7 @@ static NSString * _Nullable FirstStringFromProperty(const TagLib::PropertyMap &p
             }
 
             if (joinMultipleValues && trimmedValues.count > 1) {
-                return [trimmedValues componentsJoinedByString:@"; "];
+                return [trimmedValues.array componentsJoinedByString:@"; "];
             }
 
             return trimmedValues.firstObject;

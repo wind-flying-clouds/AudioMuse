@@ -27,11 +27,11 @@ nonisolated struct AudioImportOptions {
 
     static let `default` = AudioImportOptions(
         allowsBackgroundArtworkFetch: true,
-        metadataBackend: .avFoundation,
+        metadataBackend: .tagLib,
     )
     static let offlineTransfer = AudioImportOptions(
         allowsBackgroundArtworkFetch: false,
-        metadataBackend: .avFoundation,
+        metadataBackend: .tagLib,
     )
     static let tagLib = AudioImportOptions(
         allowsBackgroundArtworkFetch: true,
@@ -415,9 +415,13 @@ private extension AudioFileImporter {
         else {
             AppLog.warning(
                 self,
-                "importSingleFileUsingTagLib noCatalogMetadata file='\(fileName)' (sender likely did not embed catalog comment JSON)",
+                "importSingleFileUsingTagLib noCatalogMetadata file='\(fileName)' - falling back to AVFoundation",
             )
-            return .noMetadata
+            return try await importSingleFileUsingAVFoundation(
+                fileURL: fileURL,
+                existingTracks: existingTracks,
+                batchImported: &batchImported,
+            )
         }
 
         let trackID = catalogIDs.trackID
@@ -429,9 +433,13 @@ private extension AudioFileImporter {
         guard !title.isEmpty, !artist.isEmpty else {
             AppLog.warning(
                 self,
-                "importSingleFileUsingTagLib noMetadata file='\(fileName)' trackID=\(trackID) hasTitle=\(!title.isEmpty) hasArtist=\(!artist.isEmpty)",
+                "importSingleFileUsingTagLib noMetadata file='\(fileName)' trackID=\(trackID) hasTitle=\(!title.isEmpty) hasArtist=\(!artist.isEmpty) - falling back to AVFoundation",
             )
-            return .noMetadata
+            return try await importSingleFileUsingAVFoundation(
+                fileURL: fileURL,
+                existingTracks: existingTracks,
+                batchImported: &batchImported,
+            )
         }
 
         let dupKey = DuplicateKey(
@@ -465,14 +473,27 @@ private extension AudioFileImporter {
             return .duplicate
         }
 
-        let finalRecord = try tagLibMetadataReader.makeTrackRecord(
-            fileURL: fileURL,
-            relativePath: destinationRelativePath,
-            trackID: trackID,
-            albumID: albumID,
-            fileSize: fileSize,
-            modifiedAt: modifiedAt,
-        )
+        let finalRecord: AudioTrackRecord
+        do {
+            finalRecord = try tagLibMetadataReader.makeTrackRecord(
+                fileURL: fileURL,
+                relativePath: destinationRelativePath,
+                trackID: trackID,
+                albumID: albumID,
+                fileSize: fileSize,
+                modifiedAt: modifiedAt,
+            )
+        } catch {
+            AppLog.warning(
+                self,
+                "importSingleFileUsingTagLib final parse failed file='\(fileName)' trackID=\(trackID) error=\(error) - falling back to AVFoundation",
+            )
+            return try await importSingleFileUsingAVFoundation(
+                fileURL: fileURL,
+                existingTracks: existingTracks,
+                batchImported: &batchImported,
+            )
+        }
         let embeddedLyrics = try? tagLibMetadataReader.extractLyrics(from: fileURL)
 
         let stagingURL = paths.incomingDirectory
