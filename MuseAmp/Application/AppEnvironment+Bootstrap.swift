@@ -19,11 +19,13 @@ extension AppEnvironment {
         AppLog.bootstrap(with: paths)
         let apiClient = makeAPIClient(apiBaseURL: apiBaseURL)
         let metadataReader = EmbeddedMetadataReader()
+        let tagLibMetadataReader = TagLibEmbeddedMetadataReader()
         let manager = DatabaseManager(
             baseDirectory: paths.baseDirectory,
             dependencies: makeRuntimeDependencies(
                 apiClient: apiClient,
                 metadataReader: metadataReader,
+                tagLibMetadataReader: tagLibMetadataReader,
                 paths: paths,
             ),
             logSink: { level, scope, message in
@@ -60,6 +62,7 @@ extension AppEnvironment {
     static func makeRuntimeDependencies(
         apiClient: APIClient,
         metadataReader: EmbeddedMetadataReader,
+        tagLibMetadataReader: TagLibEmbeddedMetadataReader,
         paths: LibraryPaths,
     ) -> RuntimeDependencies {
         RuntimeDependencies(
@@ -90,15 +93,45 @@ extension AppEnvironment {
                 let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
                 let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? 0
                 let modifiedAt = attributes[.modificationDate] as? Date ?? .init()
-                let record = try await metadataReader.makeTrackRecord(
-                    fileURL: fileURL,
-                    relativePath: relativePath,
-                    trackID: trackID,
-                    albumID: albumID,
-                    fileSize: fileSize,
-                    modifiedAt: modifiedAt,
-                )
-                let artwork = await metadataReader.extractArtwork(from: fileURL)
+                let record: AudioTrackRecord
+                let artwork: Data?
+                if fileURL.pathExtension.lowercased() == "m4a" {
+                    do {
+                        record = try tagLibMetadataReader.makeTrackRecord(
+                            fileURL: fileURL,
+                            relativePath: relativePath,
+                            trackID: trackID,
+                            albumID: albumID,
+                            fileSize: fileSize,
+                            modifiedAt: modifiedAt,
+                        )
+                        artwork = try tagLibMetadataReader.extractArtwork(from: fileURL)
+                    } catch {
+                        AppLog.warning(
+                            "AppEnvironment",
+                            "TagLib inspectAudioFile fallback to AVFoundation for '\(fileURL.lastPathComponent)' error=\(error)",
+                        )
+                        record = try await metadataReader.makeTrackRecord(
+                            fileURL: fileURL,
+                            relativePath: relativePath,
+                            trackID: trackID,
+                            albumID: albumID,
+                            fileSize: fileSize,
+                            modifiedAt: modifiedAt,
+                        )
+                        artwork = await metadataReader.extractArtwork(from: fileURL)
+                    }
+                } else {
+                    record = try await metadataReader.makeTrackRecord(
+                        fileURL: fileURL,
+                        relativePath: relativePath,
+                        trackID: trackID,
+                        albumID: albumID,
+                        fileSize: fileSize,
+                        modifiedAt: modifiedAt,
+                    )
+                    artwork = await metadataReader.extractArtwork(from: fileURL)
+                }
                 let metadata = ImportedTrackMetadata(
                     trackID: record.trackID,
                     albumID: record.albumID,
@@ -112,7 +145,7 @@ extension AppEnvironment {
                     genreName: record.genreName,
                     composerName: record.composerName,
                     releaseDate: record.releaseDate,
-                    lyrics: nil,
+                    lyrics: (try? tagLibMetadataReader.extractLyrics(from: fileURL)),
                     sourceKind: .unknown,
                 )
                 return AudioFileInspection(

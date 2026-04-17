@@ -1,0 +1,1 @@
+../../../MuseAmp/Backend/Library/TagLibEmbeddedMetadataReader.swift

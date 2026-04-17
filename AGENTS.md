@@ -33,7 +33,7 @@
 
 - `Backend/API/`: `APIClient` and intent-level network entry points.
 - `Backend/Downloads/`: download orchestration plus persisted download records.
-- `Backend/Library/`: local and remote library data providers that bridge app services into browseable media collections.
+- `Backend/Library/`: local and remote library data providers that bridge app services into browseable media collections. `Backend/Library/TagLibBridge/` contains the Objective-C++ TagLib bridge used for m4a metadata read-only import/inspection.
 - `Backend/Logging/`: file-backed logging and log reading. Extend this instead of adding a second diagnostics path.
 - `Backend/Lyrics/`: lyrics fetching, parsing, and Chinese script conversion.
 - `Backend/MenuProviders/`: shared UIKit menu and action provider helpers used by feature controllers.

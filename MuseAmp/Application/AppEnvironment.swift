@@ -17,6 +17,7 @@ final class AppEnvironment {
     let databaseManager: DatabaseManager
     let libraryDatabase: MusicLibraryDatabase
     let metadataReader: EmbeddedMetadataReader
+    let tagLibMetadataReader: TagLibEmbeddedMetadataReader
     let lyricsCacheStore: LyricsCacheStore
     let libraryIndexer: SongLibraryIndexer
     let musicLibraryTrackRemovalService: MusicLibraryTrackRemovalService
@@ -60,6 +61,7 @@ final class AppEnvironment {
         Self.configureImageRequestAuthorization()
 
         metadataReader = EmbeddedMetadataReader()
+        tagLibMetadataReader = TagLibEmbeddedMetadataReader()
         libraryDatabase = MusicLibraryDatabase(databaseManager: databaseManager, paths: paths)
         lyricsCacheStore = databaseManager.lyricsCacheStore
         libraryIndexer = SongLibraryIndexer(databaseManager: databaseManager)
@@ -104,6 +106,7 @@ final class AppEnvironment {
             paths: paths,
             database: libraryDatabase,
             metadataReader: metadataReader,
+            tagLibMetadataReader: tagLibMetadataReader,
             apiClient: apiClient,
         )
         trackArtworkRepairService = TrackArtworkRepairService(
