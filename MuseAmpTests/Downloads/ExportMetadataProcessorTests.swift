@@ -35,6 +35,20 @@ struct ExportMetadataProcessorTests {
         return try await asset.load(.metadata)
     }
 
+    private func writeStandardTagLibMetadata(
+        title: String,
+        artist: String,
+        album: String,
+        to url: URL,
+    ) throws {
+        let metadata = TagLibAudioMetadata()
+        metadata.title = title
+        metadata.artist = artist
+        metadata.album = album
+        metadata.albumArtist = artist
+        _ = try TagLibMetadataExtractor.writeMetadata(metadata, to: url)
+    }
+
     private func stringValue(of item: AVMetadataItem) async -> String? {
         try? await item.load(.stringValue)
     }
@@ -363,6 +377,105 @@ struct ExportMetadataProcessorTests {
         #expect(importedTrack.title == "Imported Song")
         #expect(importedTrack.artistName == "Imported Artist")
         #expect(importedTrack.albumTitle == "Imported Album")
+    }
+
+    @MainActor
+    @Test
+    func `import creates local IDs for plain m4a without embedded catalog comment`() async throws {
+        let sandbox = TestLibrarySandbox()
+        let database = try sandbox.makeDatabase()
+        let paths = database.paths
+        let metadataReader = EmbeddedMetadataReader()
+        let tagLibMetadataReader = TagLibEmbeddedMetadataReader()
+        let apiClient = try APIClient(baseURL: #require(URL(string: "https://example.com")))
+        let importer = AudioFileImporter(
+            paths: paths,
+            database: database,
+            metadataReader: metadataReader,
+            tagLibMetadataReader: tagLibMetadataReader,
+            apiClient: apiClient,
+        )
+
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let fileURL = dir.appendingPathComponent("plain-import.m4a")
+        try makeSilentM4A(at: fileURL)
+        try writeStandardTagLibMetadata(
+            title: "Fallback Song",
+            artist: "Fallback Artist",
+            album: "Fallback Album",
+            to: fileURL,
+        )
+
+        let result = await importer.importFiles(urls: [fileURL])
+
+        #expect(result.succeeded == 1)
+        #expect(result.duplicates == 0)
+        #expect(result.noMetadata == 0)
+        #expect(result.errors == 0)
+
+        let importedTracks = try database.allTracks()
+        #expect(importedTracks.count == 1)
+        let importedTrack = try #require(importedTracks.first)
+        #expect(importedTrack.title == "Fallback Song")
+        #expect(importedTrack.artistName == "Fallback Artist")
+        #expect(importedTrack.albumTitle == "Fallback Album")
+        #expect(!importedTrack.trackID.isCatalogID)
+        #expect(!importedTrack.albumID.isCatalogID)
+        #expect(importedTrack.relativePath == "\(importedTrack.albumID)/\(importedTrack.trackID).m4a")
+    }
+
+    @MainActor
+    @Test
+    func `avfoundation backend also imports plain m4a without embedded catalog comment`() async throws {
+        let sandbox = TestLibrarySandbox()
+        let database = try sandbox.makeDatabase()
+        let paths = database.paths
+        let metadataReader = EmbeddedMetadataReader()
+        let tagLibMetadataReader = TagLibEmbeddedMetadataReader()
+        let apiClient = try APIClient(baseURL: #require(URL(string: "https://example.com")))
+        let importer = AudioFileImporter(
+            paths: paths,
+            database: database,
+            metadataReader: metadataReader,
+            tagLibMetadataReader: tagLibMetadataReader,
+            apiClient: apiClient,
+        )
+
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let fileURL = dir.appendingPathComponent("plain-import-avf.m4a")
+        try makeSilentM4A(at: fileURL)
+        try writeStandardTagLibMetadata(
+            title: "AVF Song",
+            artist: "AVF Artist",
+            album: "AVF Album",
+            to: fileURL,
+        )
+
+        let result = await importer.importFiles(
+            urls: [fileURL],
+            options: AudioImportOptions(
+                allowsBackgroundArtworkFetch: false,
+                metadataBackend: .avFoundation,
+            ),
+        )
+
+        #expect(result.succeeded == 1)
+        #expect(result.duplicates == 0)
+        #expect(result.noMetadata == 0)
+        #expect(result.errors == 0)
+
+        let importedTracks = try database.allTracks()
+        #expect(importedTracks.count == 1)
+        let importedTrack = try #require(importedTracks.first)
+        #expect(importedTrack.title == "AVF Song")
+        #expect(importedTrack.artistName == "AVF Artist")
+        #expect(importedTrack.albumTitle == "AVF Album")
+        #expect(!importedTrack.trackID.isCatalogID)
+        #expect(!importedTrack.albumID.isCatalogID)
     }
 }
 
