@@ -1,127 +1,63 @@
-name: Build iOS IPA
+name: Build AudioMuse IPA
 
 on:
+  workflow_dispatch:  # 允许在 GitHub 网页端的 Actions 页面手动点击触发
   push:
-    branches: [ "main", "master" ]
-  workflow_dispatch: # 允许在 GitHub 网页上手动触发运行
+    branches:
+      - main
+      - master      # 兼容 master 或 main 分支的自动触发
 
 jobs:
-  build-ipa:
-    name: Build and Package IPA
-    runs-on: macos-latest
+  build-ios:
+    name: Build iOS IPA
+    runs-on: macos-latest  # 使用最新的 macOS 环境运行 (自带 Xcode)
     
     steps:
-      - name: Checkout repository
+      - name: Checkout source code
         uses: actions/checkout@v4
         with:
           submodules: recursive # 自动拉取可能存在的子模块
 
-      - name: Detect Project Type
-        id: setup
-        run: |
-          if[ -f "pubspec.yaml" ]; then
-            echo "type=flutter" >> $GITHUB_OUTPUT
-            echo "Detected Flutter project"
-          elif [ -f "package.json" ]; then
-            echo "type=node" >> $GITHUB_OUTPUT
-            echo "Detected Node/React-Native project"
-          else
-            echo "type=native" >> $GITHUB_OUTPUT
-            echo "Detected Native iOS project"
-          fi
-          
-      - name: Setup Flutter (If Flutter)
-        if: steps.setup.outputs.type == 'flutter'
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          
-      - name: Setup Node (If React Native/Node)
-        if: steps.setup.outputs.type == 'node'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          
-      - name: Install Node Dependencies (If React Native/Node)
-        if: steps.setup.outputs.type == 'node'
-        run: |
-          if [ -f "yarn.lock" ]; then
-            yarn install
-          elif [ -f "pnpm-lock.yaml" ]; then
-            npm install -g pnpm && pnpm install
-          else
-            npm install
-          fi
+      - name: Select Xcode version
+        run: sudo xcode-select -s /Applications/Xcode.app
 
-      - name: Build Flutter App
-        if: steps.setup.outputs.type == 'flutter'
+      - name: Build Application (Unsigned)
         run: |
-          flutter pub get
-          # Flutter 免签构建
-          flutter build ios --release --no-codesign
+          echo "Building MuseAmp workspace..."
           
-      - name: Build Native / React Native iOS App
-        if: steps.setup.outputs.type != 'flutter'
-        run: |
-          # 如果存在 ios 目录(如 React Native)，则进入该目录
-          if[ -d "ios" ]; then
-            cd ios
-          fi
-          
-          # 如果存在 Podfile，自动安装依赖
-          if [ -f "Podfile" ]; then
-            echo "Installing CocoaPods dependencies..."
-            pod install --repo-update
-          fi
-          
-          # 自动寻找 Xcode 工作区或项目文件
-          if ls *.xcworkspace 1> /dev/null 2>&1; then
-            PROJECT_ARG="-workspace $(ls -1 *.xcworkspace | head -n 1)"
-          elif ls *.xcodeproj 1> /dev/null 2>&1; then
-            PROJECT_ARG="-project $(ls -1 *.xcodeproj | head -n 1)"
-          else
-            echo "Error: No Xcode project found!"
-            exit 1
-          fi
-          
-          # 自动读取 Scheme 名字
-          SCHEME=$(xcodebuild -list $PROJECT_ARG -json | jq -r '.project.schemes[0] // .workspace.schemes[0]')
-          if [ "$SCHEME" == "null" ] || [ -z "$SCHEME" ]; then
-            SCHEME=$(xcodebuild -list $PROJECT_ARG | grep -A 1 'Schemes:' | tail -n 1 | awk '{$1=$1;print}')
-          fi
-          
-          echo "Building with: $PROJECT_ARG, Scheme: $SCHEME"
-          
-          # 核心：关闭 Code Sign（免签名），保证构建 100% 成功
+          # 核心步骤：直接使用 xcodebuild 编译，注入参数强制关闭签名要求，保证100%编译成功
           xcodebuild clean build \
-            $PROJECT_ARG \
-            -scheme "$SCHEME" \
+            -workspace MuseAmp.xcworkspace \
+            -scheme MuseAmp \
             -configuration Release \
             -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath $(pwd)/build \
+            -derivedDataPath build \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            COMPILER_INDEX_STORE_ENABLE=NO
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Package to IPA
         run: |
+          echo "Packaging into .ipa..."
           mkdir -p Payload
-          # 智能搜索生成的 .app 核心文件
-          APP_PATH=$(find . -type d -name "*.app" | grep -E "Release-iphoneos|iphoneos" | head -n 1)
           
-          if[ -z "$APP_PATH" ]; then
-            echo "Error: Failed to find built .app directory"
+          # 智能提取生成的 .app 文件 (规避路径中的 Hash 后缀差异)
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -type d -name "*.app" | head -n 1)
+          
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: Cannot find the compiled .app file!"
             exit 1
           fi
           
-          echo "Packaging $APP_PATH"
+          echo "Found app at: $APP_PATH"
           cp -r "$APP_PATH" Payload/
+          
+          # 压缩为标准的 IPA 安装包
           zip -qr AudioMuse.ipa Payload
           
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AudioMuse-IPA
+          name: AudioMuse-Release
           path: AudioMuse.ipa
+          retention-days: 7 # 生成的 IPA 文件在 GitHub 保留 7 天
