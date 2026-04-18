@@ -10,18 +10,18 @@ on:
 jobs:
   build-ios:
     name: Build iOS IPA
-    runs-on: macos-15  # 强制使用最新的 macOS 15 镜像 (比 macos-latest 搭载的 Xcode 更新)
+    runs-on: macos-15  # 强制使用最新的 macOS 15 镜像
     
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
         with:
-          submodules: recursive # 必须带上这个，因为报错的库都是仓库里的子模块
+          submodules: recursive # 自动拉取子模块
 
       - name: Select the Latest Xcode
         run: |
           echo "Finding the latest Xcode installed on the GitHub Runner..."
-          # 自动寻找 Runner 上安装的最高版本 Xcode (如 Xcode_16.3.app 或 Xcode_17.app)
+          # 自动寻找 Runner 上安装的最高版本 Xcode
           LATEST_XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)
           echo "Selecting: $LATEST_XCODE"
           sudo xcode-select -s "$LATEST_XCODE"
@@ -33,8 +33,7 @@ jobs:
       - name: Downgrade Swift Tools Version (Compatibility Patch)
         run: |
           echo "Patching swift-tools-version from 6.2.x to 6.1.0 in all Package.swift files..."
-          # 核心修复方案：批量强行改写所有 Package.swift，将要求的 6.2.x 版本降级为 6.1.0
-          # 这只是放宽了 SPM 的环境限制，不会影响任何实际代码的编译。
+          # 批量强行改写所有 Package.swift，将要求的 6.2.x 版本降级为 6.1.0，防止报错
           find . -type f -name "Package.swift" -exec sed -i '' -E 's/swift-tools-version:[[:space:]]*6\.[2-9].*/swift-tools-version: 6.1.0/g' {} +
           
           # 打印修改后的文件确认是否替换成功
@@ -63,7 +62,8 @@ jobs:
           # 智能提取生成的 .app 文件
           APP_PATH=$(find build/Build/Products/Release-iphoneos -type d -name "*.app" | head -n 1)
           
-          if[ -z "$APP_PATH" ]; then
+          # 注意：这里已经修复了 if 和 [ 之间的空格
+          if [ -z "$APP_PATH" ]; then
             echo "Error: Cannot find the compiled .app file!"
             exit 1
           fi
